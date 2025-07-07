@@ -1,0 +1,10 @@
+streamlit
+langchain
+openai
+crewai
+faiss-cpu
+pypdf2
+python-dotenv
+pydantic
+matplotlib
+groq  # if using Groq API client
