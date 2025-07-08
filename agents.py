@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
-from langchain.embeddings import OpenAIEmbeddings, GroqEmbeddings
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from pydantic import BaseModel
 from typing import Optional, List
@@ -20,27 +20,23 @@ class ResumeAnalysisResult(BaseModel):
     weaknesses: List[str]
 
 def get_chat_model():
-    if API_BACKEND == "groq":
-        return ChatOpenAI(client="groq", api_key=GROQ_API_KEY)
     return ChatOpenAI(api_key=OPENAI_API_KEY)
 
-def embed_docs(pdf_path: str):
-    loader = PyPDFLoader(pdf_path)
+def embed_docs(uploaded_file):
+    temp_path = "/tmp/resume.pdf"
+    with open(temp_path, "wb") as f:
+        f.write(uploaded_file.read())
+    loader = PyPDFLoader(temp_path)
     docs = loader.load()
-    if API_BACKEND == "groq":
-        embedder = GroqEmbeddings(api_key=GROQ_API_KEY)
-    else:
-        embedder = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+    embedder = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
     store = FAISS.from_documents(docs, embedder)
     return store
 
-def analyze_resume(resume_path: str, role_desc: str, cutoff: float) -> ResumeAnalysisResult:
-    store = embed_docs(resume_path)
+def analyze_resume(resume_file, role_desc: str, cutoff: float) -> ResumeAnalysisResult:
+    store = embed_docs(resume_file)
     chat = get_chat_model()
-    # Construct prompt...
     msg = f"Role description: {role_desc}\nAssess the resume and give:\n- score out of 100\n- top 5 strengths\n- top 5 improvements\n- top 5 weaknesses"
-    resp = chat.predict(messages=[{"role":"user","content":msg}])
-    # parse response (implementation simplified)
+    resp = chat.predict(messages=[{"role": "user", "content": msg}])
     parts = resp.split("\n")
     score = float(parts[0].split(":")[1].strip())
     strengths = [s.strip() for s in parts[1].split(":")[1].split(",")]
@@ -53,7 +49,7 @@ def generate_questions(role: str, difficulty: str, count: int, custom_qs: Option
     msg = f"Generate {count} {difficulty} interview questions for a {role} candidate."
     if custom_qs:
         msg += " Also include custom questions: " + "; ".join(custom_qs)
-    resp = chat.predict(messages=[{"role":"user","content":msg}])
+    resp = chat.predict(messages=[{"role": "user", "content": msg}])
     return resp.split("\n")
 
 def improve_resume_section(resume_text: str, section: str, role: Optional[str] = None) -> str:
@@ -62,5 +58,5 @@ def improve_resume_section(resume_text: str, section: str, role: Optional[str] =
     if role:
         msg += f" for a {role} role"
     msg += f". Original text:\n{resume_text}"
-    resp = chat.predict(messages=[{"role":"user","content":msg}])
+    resp = chat.predict(messages=[{"role": "user", "content": msg}])
     return resp
